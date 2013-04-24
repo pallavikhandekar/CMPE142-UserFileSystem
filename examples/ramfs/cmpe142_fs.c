@@ -33,6 +33,10 @@ static const struct super_operations cmpe142_ops;
 static const struct inode_operations cmpe142_dir_inode_operations;
 struct sock *netlink_sk = NULL;
 
+/**OPEN CODE VARIABLES**/
+int response_received = 0;
+int fileHeader;
+/**OPEN CODE VARIABLES**/
 /* Initializing a file_system_type struct */
 /*
 static struct file_system_type cmpe142_fs_type = {
@@ -76,8 +80,6 @@ const struct address_space_operations cmpe142_aops = {
 /**START FILE_OPERATIONS**/
 
 static int cmpe142_open(struct inode *inode,struct file *file){
-	int response_received=1;
-	int error = 0;
 	int msg_length;
 	struct sk_buff *skb_out;
 	struct nlmsghdr *nlh;
@@ -107,8 +109,9 @@ static int cmpe142_open(struct inode *inode,struct file *file){
 	//nlmsg_unicast(netlink_sk,skb_out,nlh->nlmsg_pid);
 
 	//wait till success received from daemon.
-	//while(!response_received);
-	return error;
+	while(!response_received);
+	printk(KERN_ERR "GOT HEADER %d\n",fileHeader);
+	return fileHeader;
 }
 
 static ssize_t cmpe142_read(struct file *filep,
@@ -371,11 +374,11 @@ char *dataFromUser;
 
 	printk(KERN_INFO "Entering: %s\n", __FUNCTION__);
 
-	msg_size=strlen(msg);
+/*	msg_size=strlen(msg);
 
 	nlh=(struct nlmsghdr*)skb->data;
 	printk(KERN_INFO "Netlink received msg payload:%s\n",(char*)nlmsg_data(nlh));
-	pid = nlh->nlmsg_pid; /*pid of sending process */
+	pid = nlh->nlmsg_pid; //pid of sending process 
 
 	skb_out = nlmsg_new(msg_size,0);
 
@@ -387,19 +390,30 @@ char *dataFromUser;
 
 	} 
 	nlh=nlmsg_put(skb_out,0,0,NLMSG_DONE,msg_size,0);  
-	NETLINK_CB(skb_out).dst_group = 0; /* not in mcast group */
+	NETLINK_CB(skb_out).dst_group = 0; // not in mcast group 
 	strncpy(nlmsg_data(nlh),msg,msg_size);
 
 	res=nlmsg_unicast(netlink_sk,skb_out,pid);
 
 	if(res<0)
 	    printk(KERN_INFO "Error while sending bak to user\n");
+*/
 //*****Netlink Code to receive data from User Space*****
-/*	nlh=(struct nlmsghdr*)skb->data;
+	nlh=(struct nlmsghdr*)skb->data;
 	dataFromUser = (char*)nlmsg_data(nlh);
-	dataFromUser = strtok(dataFromUser," ");
-	printk(KERN_INFO "NETLINK Data from USER_SPACE:%s\n",dataFromUser);
-	*/
+	char *oper = strsep(&dataFromUser," ");
+	printk(KERN_INFO "NETLINK Data from USER_SPACE: %s***\n",oper);
+	char open[10];
+        strcpy(open,"OPEN");
+	if(strcmp(oper,open)==0)
+	{	
+		printk(KERN_INFO "RCV OPEN :");
+		int status = sscanf(dataFromUser,"%d",&fileHeader);
+		printk(KERN_INFO "SCCANF RESULT %d ** %d",status,fileHeader);
+		response_received=1;
+	        
+	}
+	
 //****End Code***********************************
 }
 int init_module()
