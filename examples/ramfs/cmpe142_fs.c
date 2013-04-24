@@ -362,9 +362,12 @@ extern const struct file_operations cmpe142_file_operations;
 
 static void socket_receiver(struct sk_buff *skb)
 {
+char *oper;
+char open[10];
 struct nlmsghdr *nlh;
 char *dataFromUser;
-//TEST_COMMUNICATION_CODE
+int status;
+/**TEST_COMMUNICATION_CODE
 	
 	int pid;
 	struct sk_buff *skb_out;
@@ -374,7 +377,7 @@ char *dataFromUser;
 
 	printk(KERN_INFO "Entering: %s\n", __FUNCTION__);
 
-/*	msg_size=strlen(msg);
+	msg_size=strlen(msg);
 
 	nlh=(struct nlmsghdr*)skb->data;
 	printk(KERN_INFO "Netlink received msg payload:%s\n",(char*)nlmsg_data(nlh));
@@ -397,18 +400,17 @@ char *dataFromUser;
 
 	if(res<0)
 	    printk(KERN_INFO "Error while sending bak to user\n");
-*/
+END TEST COMMUNICATION*/
 //*****Netlink Code to receive data from User Space*****
 	nlh=(struct nlmsghdr*)skb->data;
 	dataFromUser = (char*)nlmsg_data(nlh);
-	char *oper = strsep(&dataFromUser," ");
+	oper = strsep(&dataFromUser," ");
 	printk(KERN_INFO "NETLINK Data from USER_SPACE: %s***\n",oper);
-	char open[10];
         strcpy(open,"OPEN");
 	if(strcmp(oper,open)==0)
 	{	
 		printk(KERN_INFO "RCV OPEN :");
-		int status = sscanf(dataFromUser,"%d",&fileHeader);
+		status = sscanf(dataFromUser,"%d",&fileHeader);
 		printk(KERN_INFO "SCCANF RESULT %d ** %d",status,fileHeader);
 		response_received=1;
 	        
