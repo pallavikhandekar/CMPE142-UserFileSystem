@@ -332,7 +332,8 @@ char open[10];
 struct nlmsghdr *nlh;
 char *dataFromUser;
 int status;
-/**TEST_COMMUNICATION_CODE
+/*
+//TEST_COMMUNICATION_CODE
 	
 	int pid;
 	struct sk_buff *skb_out;
@@ -365,7 +366,9 @@ int status;
 
 	if(res<0)
 	    printk(KERN_INFO "Error while sending bak to user\n");
-END TEST COMMUNICATION*/
+//END TEST COMMUNICATION
+*/
+    
 //*****Netlink Code to receive data from User Space*****
 	nlh=(struct nlmsghdr*)skb->data;
 	dataFromUser = (char*)nlmsg_data(nlh);
