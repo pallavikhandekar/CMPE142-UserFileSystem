@@ -39,7 +39,7 @@ int response_received = 0;
 int fileHeader;
 
 /**OPEN CODE VARIABLES**/
-/* Initializing a file_system_type struct */
+
 
 // Used by kernel at unmount tie for the cleanup
 static void cmpe142_kill_super_block(struct super_block *sb)
@@ -232,12 +232,6 @@ struct dentry *cmpe142_mount(struct file_system_type *fs_type,
         return mount_nodev(fs_type, flags, data, cmpe142_fill_super);
 }
 
-static struct file_system_type cmpe142_fs_type = {
-        .name           = "cmpe142",
-        .mount          = cmpe142_mount,
-        .kill_sb        = cmpe142_kill_super_block,
-};
-
 static const struct super_operations cmpe142_ops = {
         .statfs         = simple_statfs,
         .drop_inode     = generic_delete_inode,
@@ -351,7 +345,7 @@ int status;
 	msg_size=strlen(msg);
 
 	nlh=(struct nlmsghdr*)skb->data;
-	printk(KERN_INFO "Netlink received msg payload:%s\n",(char*)nlmsg_data(nlh));
+	printk(KERN_INFO "Netlink received data from User:%s\n",(char*)nlmsg_data(nlh));
 	pid = nlh->nlmsg_pid; //pid of sending process 
 
 	skb_out = nlmsg_new(msg_size,0);
@@ -389,6 +383,15 @@ END TEST COMMUNICATION*/
 	
 //****End Code***********************************
 }
+
+/* Initializing a file_system_type struct */
+static struct file_system_type cmpe142_fs_type = {
+    .name           = "cmpe142",
+    .mount          = cmpe142_mount,
+    .kill_sb        = cmpe142_kill_super_block,
+};
+
+
 int init_module()
 {
 	int register_fs_status;

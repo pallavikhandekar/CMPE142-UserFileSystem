@@ -8,26 +8,26 @@
 # define MAX_PAYLOAD 2048
 int main()
 {
-struct sockaddr_nl s_nladdr, d_nladdr;
+struct sockaddr_nl source_nladdr, destination_nladdr;
 struct nlmsghdr *nlh=NULL ;
 struct iovec iov;
 struct msghdr message ;
 int s=socket(AF_NETLINK ,SOCK_RAW , NETLINK_USER );
 
 //Defining Source Address  
-memset(&s_nladdr, 0 ,sizeof(s_nladdr));
-s_nladdr.nl_family= AF_NETLINK ;
-s_nladdr.nl_pad=0;
-s_nladdr.nl_pid = getpid();
-bind(s, (struct sockaddr*)&s_nladdr, sizeof(s_nladdr));
+memset(&source_nladdr, 0 ,sizeof(source_nladdr));
+source_nladdr.nl_family= AF_NETLINK ;
+source_nladdr.nl_pad=0;
+source_nladdr.nl_pid = getpid();
+bind(s, (struct sockaddr*)&source_nladdr, sizeof(source_nladdr));
 
 //Defining Desitination Address
-memset(&d_nladdr, 0 ,sizeof(d_nladdr));
-d_nladdr.nl_family= AF_NETLINK ;
-d_nladdr.nl_pad=0;
-d_nladdr.nl_pid = 0; /* destined to kernel */
+memset(&destination_nladdr, 0 ,sizeof(destination_nladdr));
+destination_nladdr.nl_family= AF_NETLINK ;
+destination_nladdr.nl_pad=0;
+destination_nladdr.nl_pid = 0; /* destined to kernel */
 
-//Fill the netlink message header
+//Create Message to be sent to Kernel
 nlh = (struct nlmsghdr *)malloc(100);
 memset(nlh , 0 , 100);
 strcpy(NLMSG_DATA(nlh), "Knock Knock CMPE142!!!" );
@@ -42,12 +42,14 @@ iov.iov_len = nlh->nlmsg_len;
 
 /* Duplex communication of Message between User and Kernel */
 memset(&message,0,sizeof(message));
-message.msg_name = (void *) &d_nladdr ;
-message.msg_namelen=sizeof(d_nladdr);
+message.msg_name = (void *) &destination_nladdr ;
+message.msg_namelen=sizeof(destination_nladdr);
 message.msg_iov = &iov;
 message.msg_iovlen = 1;
+//Send message and wait for Kernel to reply
 sendmsg(s, &message, 0);
 printf("Waiting for message from Kernel\n");
+//Block on Receive till Kernel Sends reply
 recvmsg(s,&message,0);
 printf("Received Message: %s\n",NLMSG_DATA(nlh));
 close(s);
