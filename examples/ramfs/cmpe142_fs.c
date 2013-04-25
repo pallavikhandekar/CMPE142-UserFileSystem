@@ -1,6 +1,11 @@
 /* 
- *  cmpe142_fs.c -  Register and create a user file system
- */
+*  cmpe142_fs.c -  Register and create a user file system.
+*  Code referred from fs/ramfs/inode.c and other files of fs/ramfs/
+*
+*  Kernel components:
+*  init_module - Creates netlink socket and registers the fileystem
+*  cleanup_module - Disconnects netlink socket and unregisters the fileystem
+*/
  
 #include <linux/kernel.h>	/* required for kernel modules */
 #include <linux/module.h>	/* Specifically, a module */
@@ -8,15 +13,11 @@
 #include <linux/fs.h>	/* contain filesystem structs and macros */
 #include <linux/mount.h>
 #include <linux/pagemap.h>
-#include <linux/highmem.h>
-#include <linux/time.h>
 #include <linux/string.h>
 #include <linux/backing-dev.h>
-#include <linux/sched.h>
 #include <linux/parser.h>
 #include <linux/magic.h>
 #include <linux/slab.h>
-#include <asm/uaccess.h>
 #include "internal.h"
 #include "cmpe142fs.h"
 #include <linux/mm.h>
@@ -30,28 +31,24 @@
 #define CMPE142_DEFAULT_MODE      0755
 
 static const struct super_operations cmpe142_ops;
-static const struct inode_operations cmpe142_dir_inode_operations;
+static const struct inode_operations cmpe142_dir_inode_ops;
 struct sock *netlink_sk = NULL;
 
 /**OPEN CODE VARIABLES**/
 int response_received = 0;
 int fileHeader;
+
 /**OPEN CODE VARIABLES**/
 /* Initializing a file_system_type struct */
-/*
-static struct file_system_type cmpe142_fs_type = {
-        .owner          = THIS_MODULE,
-        .name           = "cmpe142",
-        .fs_flags       = FS_REQUIRES_DEV,
-        .kill_sb     = kill_block_super,
-};
-*/
-static void cmpe142_kill_sb(struct super_block *sb)
+
+// Used by kernel at unmount tie for the cleanup
+static void cmpe142_kill_super_block(struct super_block *sb)
 {
         kfree(sb->s_fs_info);
         kill_litter_super(sb);
 }
 
+// Given as input to cmpe142_parse_params
 struct cmpe142_mount_opts {
         umode_t mode;
 };
@@ -70,15 +67,16 @@ static const match_table_t tokens = {
         {Opt_err, NULL}
 };
 
+// struct defining caching operations
 const struct address_space_operations cmpe142_aops = {
         .readpage       = simple_readpage,
         .write_begin    = simple_write_begin,
         .write_end      = simple_write_end,
-        //.set_page_dirty = __set_page_dirty_no_writeback,
 };
 
 /**START FILE_OPERATIONS**/
 
+// function to intercept open triggered by user application
 static int cmpe142_open(struct inode *inode,struct file *file){
 	int msg_length;
 	struct sk_buff *skb_out;
@@ -114,30 +112,34 @@ static int cmpe142_open(struct inode *inode,struct file *file){
 	return fileHeader;
 }
 
+// function to intercept read operation triggered by user application
 static ssize_t cmpe142_read(struct file *filep,
-char *buffer, //buffer to fill with data
-size_t length, //the length of buffer
-loff_t *offset //offset in file
+	char *buffer, //buffer to fill with data
+	size_t length, //the length of buffer
+	loff_t *offset //offset in file
 ){
-printk(KERN_INFO"read called\n");
-return 0;
+	printk(KERN_INFO"read called\n");
+	return 0;
 }
 
+// function to intercept write operation triggered by user application
 static ssize_t cmpe142_write(struct file *file,
-const char *buff,
-size_t len,
-loff_t *off){
-printk(KERN_INFO"write called\n");
-return 0;
+	const char *buff,
+	size_t len,
+	loff_t *off
+){
+
+	printk(KERN_INFO"write called\n");
+	return 0;
 }
 
-static int cmpe142_release(struct inode *inode, struct file *file)
-{
-printk(KERN_INFO"release called\n");
-return 0;
+static int cmpe142_release(struct inode *inode, struct file *file){
+	printk(KERN_INFO"release called\n");
+	return 0;
 }
 
-const struct file_operations cmpe142_file_operations = {
+// operations supported by filesystem
+const struct file_operations cmpe142_file_ops = {
         .read           = cmpe142_read,
         .write          = cmpe142_write,
 	.open 		= cmpe142_open,
@@ -145,7 +147,7 @@ const struct file_operations cmpe142_file_operations = {
 };
 
 /*
-const struct file_operations cmpe142_file_operations = {
+const struct file_operations cmpe142_file_ops = {
 	.read		= do_sync_read,
 	.aio_read	= generic_file_aio_read,
 	.write		= do_sync_write,
@@ -158,12 +160,14 @@ const struct file_operations cmpe142_file_operations = {
 	.open		= cmpe142_open,
 };*/
 /**END FILE_OPERATIONS**/
-const struct inode_operations cmpe142_file_inode_operations = {
+
+// inode operations supported by filesystem, used by commands like touch & ls
+const struct inode_operations cmpe142_file_inode_ops = {
         .setattr        = simple_setattr,
         .getattr        = simple_getattr,
 };
 
-static int cmpe142_parse_options(char *data, struct cmpe142_mount_opts *opts)
+static int cmpe142_parse_params(char *data, struct cmpe142_mount_opts *opts)
 {
         substring_t args[MAX_OPT_ARGS];
         int option;
@@ -183,12 +187,6 @@ static int cmpe142_parse_options(char *data, struct cmpe142_mount_opts *opts)
                                 return -EINVAL;
                         opts->mode = option & S_IALLUGO;
                         break;
-                /*
-                 * We might like to report bad mount options here;
-                 * but traditionally ramfs has ignored all mount options,
-                 * and as it is used as a !CONFIG_SHMEM simple substitute
-                 * for tmpfs, better continue to ignore other mount options.
-                 */
                 }
         }
 
@@ -196,7 +194,6 @@ static int cmpe142_parse_options(char *data, struct cmpe142_mount_opts *opts)
 }
 
 /* Initializing super block */
-//int cmpe142_fill_super(struct super_block *sb, void *data, int silent);
 int cmpe142_fill_super(struct super_block *sb, void *data, int silent)
 {
         struct cmpe142_fs_info *fsi;
@@ -210,7 +207,7 @@ int cmpe142_fill_super(struct super_block *sb, void *data, int silent)
         if (!fsi)
                 return -ENOMEM;
 
-        err = cmpe142_parse_options(data, &fsi->mount_opts);
+        err = cmpe142_parse_params(data, &fsi->mount_opts);
         if (err)
                 return err;
 
@@ -235,32 +232,11 @@ struct dentry *cmpe142_mount(struct file_system_type *fs_type,
         return mount_nodev(fs_type, flags, data, cmpe142_fill_super);
 }
 
-/*
-static struct dentry *rootfs_mount(struct file_system_type *fs_type,
-        int flags, const char *dev_name, void *data)
-{
-        return mount_nodev(fs_type, flags|MS_NOUSER, data, cmpe142_fill_super);
-}
-*/
-
 static struct file_system_type cmpe142_fs_type = {
         .name           = "cmpe142",
         .mount          = cmpe142_mount,
-        .kill_sb        = cmpe142_kill_sb,
+        .kill_sb        = cmpe142_kill_super_block,
 };
-
-/*
-static struct file_system_type rootfs_fs_type = {
-        .name           = "rootfs",
-        .mount          = rootfs_mount,
-        .kill_sb        = kill_litter_super,
-};
-*/
-
-/* Initializing inode */
-//struct inode *cmpe142_get_inode(struct super_block *sb, const struct inode *dir,
- //        umode_t mode, dev_t dev);
-
 
 static const struct super_operations cmpe142_ops = {
         .statfs         = simple_statfs,
@@ -268,7 +244,7 @@ static const struct super_operations cmpe142_ops = {
         .show_options   = generic_show_options,
 };
 
-static struct backing_dev_info cmpe142_backing_dev_info = {
+static struct backing_dev_info cmpe142_backing_device_info = {
         .name           = "cmpe142",
         .ra_pages       = 0,    /* No readahead */
         .capabilities   = BDI_CAP_NO_ACCT_AND_WRITEBACK |
@@ -285,7 +261,7 @@ struct inode *cmpe142_get_inode(struct super_block *sb,
                 inode->i_ino = get_next_ino();
                 inode_init_owner(inode, dir, mode);
                 inode->i_mapping->a_ops = &cmpe142_aops;
-                inode->i_mapping->backing_dev_info = &cmpe142_backing_dev_info;
+                inode->i_mapping->backing_dev_info = &cmpe142_backing_device_info;
                 mapping_set_gfp_mask(inode->i_mapping, GFP_HIGHUSER);
                 mapping_set_unevictable(inode->i_mapping);
                 inode->i_atime = inode->i_mtime = inode->i_ctime = CURRENT_TIME;
@@ -294,11 +270,11 @@ struct inode *cmpe142_get_inode(struct super_block *sb,
                         init_special_inode(inode, mode, dev);
                         break;
                 case S_IFREG:
-                        inode->i_op = &cmpe142_file_inode_operations;
-                        inode->i_fop = &cmpe142_file_operations;
+                        inode->i_op = &cmpe142_file_inode_ops;
+                        inode->i_fop = &cmpe142_file_ops;
                         break;
                 case S_IFDIR:
-                        inode->i_op = &cmpe142_dir_inode_operations;
+                        inode->i_op = &cmpe142_dir_inode_ops;
                         inode->i_fop = &simple_dir_operations;
 
                         /* directory inodes start off with i_nlink == 2 (for "." entry) */
@@ -340,16 +316,11 @@ static int cmpe142_create(struct inode *dir, struct dentry *dentry, umode_t mode
         return cmpe142_mknod(dir, dentry, mode | S_IFREG, 0);
 }
 
-/* required for mounting */
-//extern struct dentry *cmpe142_mount(struct file_system_type *fs_type,
- //        int flags, const char *dev_name, void *data);
-
-static const struct inode_operations cmpe142_dir_inode_operations = {
+static const struct inode_operations cmpe142_dir_inode_ops = {
         .create         = cmpe142_create,
         .lookup         = simple_lookup,
         .link           = simple_link,
         .unlink         = simple_unlink,
-        //.symlink        = ramfs_symlink,
         .mkdir          = cmpe142_mkdir,
         .rmdir          = simple_rmdir,
         .mknod          = cmpe142_mknod,
@@ -358,7 +329,7 @@ static const struct inode_operations cmpe142_dir_inode_operations = {
 
 
 /* associating file operations */
-extern const struct file_operations cmpe142_file_operations;
+extern const struct file_operations cmpe142_file_ops;
 
 static void socket_receiver(struct sk_buff *skb)
 {
@@ -450,6 +421,7 @@ void cleanup_module()
         
 	/**NETLINK_SOCKET_RELEASE**/
 	netlink_kernel_release(netlink_sk);
+
 	/* unregistering filesystem */
 	unregister_filesystem(&cmpe142_fs_type);	
 	printk(KERN_INFO "Filesystem removed\n");
